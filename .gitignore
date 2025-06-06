@@ -34,3 +34,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 忽略嵌套的项目目录
+xhs_create_two/
+
+# 测试文件
+test-api*.js
