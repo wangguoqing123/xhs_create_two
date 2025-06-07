@@ -290,6 +290,17 @@ export default function RewritePage() {
           content: result.data.content,
           images: result.data.images
         });
+        
+        // 解析完成后自动滚动到成功提示区域
+        setTimeout(() => {
+          const element = document.getElementById('parse-success');
+          if (element) {
+            element.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'center' 
+            });
+          }
+        }, 100);
       } else {
         throw new Error('解析失败：未获取到数据');
       }
@@ -367,7 +378,7 @@ export default function RewritePage() {
 
         {/* Parser Section */}
         <Card className="premium-shadow border-0 overflow-hidden bg-gradient-to-br from-white to-blue-50/30">
-          <CardHeader className="bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 border-b border-blue-100 py-12">
+          {/* <CardHeader className="bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 border-b border-blue-100 py-12">
             <CardTitle className="flex items-center gap-6 text-4xl font-bold">
               <div className="p-4 bg-gradient-to-r from-blue-600 to-purple-600 rounded-3xl shadow-2xl">
                 <Link className="h-10 w-10 text-white" />
@@ -377,7 +388,7 @@ export default function RewritePage() {
             <CardDescription className="text-2xl mt-6 text-gray-600 font-light">
               粘贴小红书笔记链接，我们将智能解析内容并提供全方位改写服务
             </CardDescription>
-          </CardHeader>
+          </CardHeader> */}
           <CardContent className="p-16 space-y-12">
             <div className="space-y-8">
               <div className="flex items-center justify-between">
@@ -461,7 +472,7 @@ export default function RewritePage() {
         {originalContent && (
           <div className="space-y-12">
             {/* Parse Success Notification */}
-            <div className="text-center">
+            <div className="text-center" id="parse-success">
               <div className="inline-flex items-center space-x-4 bg-gradient-to-r from-green-50 to-emerald-50 px-12 py-6 rounded-3xl border border-green-200 shadow-xl">
                 <CheckCircle className="h-8 w-8 text-green-600" />
                 <span className="text-2xl font-bold text-green-700">内容解析完成！开始您的创作之旅</span>
@@ -527,7 +538,7 @@ export default function RewritePage() {
                             <div className="w-3 h-10 bg-gradient-to-b from-purple-500 to-pink-500 rounded-full"></div>
                             原文正文
                           </h3>
-                          <div className="p-8 bg-gray-50 rounded-3xl border border-gray-200 max-h-96 overflow-y-auto shadow-lg">
+                          <div className="p-8 bg-gray-50 rounded-3xl border border-gray-200 max-h-[600px] overflow-y-auto shadow-lg">
                             <pre className="whitespace-pre-wrap text-gray-700 font-sans leading-relaxed text-lg">
                               {originalContent.content}
                             </pre>
