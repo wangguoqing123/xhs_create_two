@@ -36,5 +36,5 @@ yarn-error.log*
 next-env.d.ts
 
 
-# 测试文件
+# 测试文件但是
 test-api*.js
