@@ -15,6 +15,10 @@ import { useCookieStorage } from '@/contexts/cookie-context';
 import { CookieConfigDialog } from '@/components/cookie-config-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import Image from 'next/image';
+import { useToast } from '@/hooks/use-toast';
+
+// 导入AI服务的类型定义
+import type { RewriteInput, RewriteResult, RewriteVersion } from '@/app/lib/aiService';
 
 interface OriginalContent {
   title: string;
@@ -211,6 +215,24 @@ export default function RewritePage() {
   // Cookie 管理
   const { cookie, hasCookie, isLoaded } = useCookieStorage();
   
+  // Toast 通知
+  const { toast } = useToast();
+
+  // 计算字符数（考虑Emoji占两个字符）
+  const countCharacters = (text: string): number => {
+    let count = 0;
+    for (const char of text) {
+      // 检查是否为Emoji（简单判断，使用Unicode范围）
+      const codePoint = char.codePointAt(0);
+      if (codePoint && codePoint >= 0x1F300 && codePoint <= 0x1F9FF) {
+        count += 2; // Emoji算2个字符
+      } else {
+        count += 1; // 其他字符算1个字符
+      }
+    }
+    return count;
+  };
+  
   // 文案仿写相关状态
   const [rewriteSettings, setRewriteSettings] = useState<RewriteSettings>({
     seoKeywords: '',
@@ -322,12 +344,88 @@ export default function RewritePage() {
   };
 
   const handleRewrite = async () => {
+    if (!originalContent) {
+      toast({
+        title: "请先解析内容",
+        description: "请先粘贴并解析小红书笔记链接",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsRewriting(true);
-    // Simulate API call
-    setTimeout(() => {
-      setRewrittenVersions(mockRewrittenVersions);
+    setRewrittenVersions([]);
+
+    try {
+      console.log('🎯 开始文案改写:', originalContent.title);
+      
+      // 构建API请求的用户输入数据
+      const rewriteInput: RewriteInput = {
+        originalTitle: originalContent.title,
+        originalContent: originalContent.content,
+        seoKeywords: rewriteSettings.seoKeywords || undefined,
+        seoPositions: rewriteSettings.seoPositions.length > 0 ? rewriteSettings.seoPositions : undefined,
+        theme: rewriteSettings.theme || undefined,
+        purpose: rewriteSettings.purpose || undefined,
+        ipIdentity: rewriteSettings.ipIdentity || undefined
+      };
+      
+      console.log('📤 发送改写请求数据:', rewriteInput);
+      
+      // 调用后端API进行文案改写
+      const response = await fetch('/api/generate-rewrite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(rewriteInput),
+      });
+
+      console.log('📥 API响应状态:', response.status);
+
+      // 检查API响应是否成功
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '文案改写失败，请稍后重试');
+      }
+
+      // 解析API返回的结果数据
+      const result: RewriteResult = await response.json();
+      console.log('✅ 文案改写成功，版本数量:', result.versions.length);
+      
+      // 转换为页面需要的格式
+      const convertedVersions: RewrittenVersion[] = result.versions.map((version: RewriteVersion) => ({
+        id: version.id,
+        title: version.title,
+        content: version.content,
+        style: version.style
+      }));
+      
+      // 保存改写结果到状态
+      setRewrittenVersions(convertedVersions);
+      
+      // 显示成功提示
+      toast({
+        title: "文案改写成功！",
+        description: `为您生成了 ${result.versions.length} 个高质量改写版本`,
+        className: "border-green-200 bg-green-50 text-green-900",
+      });
+      
+    } catch (err) {
+      // 错误处理
+      console.error('❌ 文案改写失败:', err);
+      const errorMessage = err instanceof Error ? err.message : '文案改写时发生未知错误';
+      
+      // 显示错误提示
+      toast({
+        title: "改写失败",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      // 无论成功失败都要重置加载状态
       setIsRewriting(false);
-    }, 3000);
+    }
   };
 
   const handleGenerateCover = async () => {
@@ -676,6 +774,9 @@ export default function RewritePage() {
                                       {version.style}
                                     </Badge>
                                   </div>
+                                  <div className={`text-sm ${countCharacters(version.title) > 20 ? 'text-red-500 font-semibold' : 'text-gray-500'}`}>
+                                    标题: {countCharacters(version.title)}/20字
+                                  </div>
                                 </div>
                                 <CardTitle className="text-2xl leading-relaxed font-bold text-gray-900">
                                   {version.title}
@@ -683,7 +784,12 @@ export default function RewritePage() {
                               </CardHeader>
                               <CardContent className="space-y-8 p-8">
                                 <div>
-                                  <Label className="text-lg font-bold text-gray-600 mb-4 block">文案内容</Label>
+                                  <div className="flex items-center justify-between mb-4">
+                                    <Label className="text-lg font-bold text-gray-600">文案内容</Label>
+                                    <div className={`text-sm ${countCharacters(version.content) > 800 ? 'text-red-500 font-semibold' : 'text-gray-500'}`}>
+                                      正文: {countCharacters(version.content)}/800字
+                                    </div>
+                                  </div>
                                   <Textarea
                                     value={version.content}
                                     readOnly

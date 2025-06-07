@@ -27,6 +27,30 @@ export interface GenerationResult {
     userPainPoints: string;            // 推断的用户痛点
   };
 }
+
+// 定义文案改写的输入数据结构
+export interface RewriteInput {
+  originalTitle: string;        // 原始标题
+  originalContent: string;      // 原始内容
+  seoKeywords?: string;         // SEO关键词
+  seoPositions?: string[];      // SEO位置
+  theme?: string;               // 特定主题
+  purpose?: string;             // 改写目的
+  ipIdentity?: string;          // IP身份
+}
+
+// 定义单个改写版本的数据结构
+export interface RewriteVersion {
+  id: string;                   // 改写版本ID
+  title: string;                // 改写后的标题
+  content: string;              // 改写后的内容
+  style: string;                // 改写风格
+}
+
+// 定义改写结果的数据结构
+export interface RewriteResult {
+  versions: RewriteVersion[];   // 改写版本列表
+}
   
 // 从环境变量获取OpenRouter API密钥
 function getOpenRouterApiKey(): string {
@@ -291,3 +315,224 @@ function buildPrompt(input: UserInput): string {
       throw error
     }
   }
+
+// 构建文案改写的AI提示词
+function buildRewritePrompt(input: RewriteInput): string {
+  const seoInfo = input.seoKeywords ? `
+- SEO关键词：${input.seoKeywords}
+- SEO位置要求：${input.seoPositions?.join('、') || '无特殊要求'}` : '';
+
+  const contentInfo = input.theme || input.purpose || input.ipIdentity ? `
+- 特定主题：${input.theme || '无'}
+- 改写目的：${input.purpose || '无'}
+- IP身份：${input.ipIdentity || '无'}` : '';
+
+  return `你是小红书文案改写专家，需要根据原文和用户要求生成3个不同风格的改写版本。
+
+**原文信息：**
+- 原标题：${input.originalTitle}
+- 原正文：${input.originalContent}
+${seoInfo}
+${contentInfo}
+
+ **改写要求：**
+ 1. 生成3个不同风格的改写版本，每个版本包含标题和正文
+ 2. 标题严格不超过20个字符（标点符号算1个字符，Emoji算2个字符）
+ 3. 正文严格不超过800个字符（标点符号算1个字符，Emoji算2个字符）
+ 4. 字符限制非常重要，必须严格遵守，超过字符限制的内容会被拒绝
+ 5. 保持小红书风格，内容要精炼且吸引人
+ 6. 如果有SEO关键词，请自然地融入到指定位置
+ 7. 三个版本要有不同的风格：专业干货型、教程指南型、亲和分享型
+
+**输出格式（必须严格按照此JSON格式）：**
+\`\`\`json
+{
+  "versions": [
+    {
+      "title": "改写后的标题",
+      "content": "改写后的正文",
+      "style": "专业干货型"
+    },
+    {
+      "title": "改写后的标题",
+      "content": "改写后的正文", 
+      "style": "教程指南型"
+    },
+    {
+      "title": "改写后的标题",
+      "content": "改写后的正文",
+      "style": "亲和分享型"
+    }
+  ]
+}
+\`\`\`
+
+立即生成3个改写版本！`;
+}
+
+// 计算字符数（考虑Emoji占两个字符）
+function countCharacters(text: string): number {
+  let count = 0;
+  for (const char of text) {
+    // 检查是否为Emoji（简单判断，使用Unicode范围）
+    const codePoint = char.codePointAt(0);
+    if (codePoint && codePoint >= 0x1F300 && codePoint <= 0x1F9FF) {
+      count += 2; // Emoji算2个字符
+    } else {
+      count += 1; // 其他字符算1个字符
+    }
+  }
+  return count;
+}
+
+// 验证文案长度是否符合要求
+function validateContentLength(title: string, content: string): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  const titleCount = countCharacters(title);
+  const contentCount = countCharacters(content);
+  
+  if (titleCount > 20) {
+    errors.push(`标题超出字符限制：${titleCount}/20字符`);
+  }
+  
+  if (contentCount > 800) {
+    errors.push(`正文超出字符限制：${contentCount}/800字符`);
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+}
+
+// 解析文案改写AI响应
+function parseRewriteResponse(response: {
+  choices: Array<{
+    message: {
+      content: string;
+    };
+  }>;
+}): { versions: RewriteVersion[] } {
+  try {
+    // 获取AI返回的文本内容
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error('AI响应内容为空');
+    }
+
+    console.log('🔍 AI改写响应长度:', content.length);
+    
+    // 尝试提取JSON格式的数据
+    let jsonStr = content;
+
+    // 1. 首先尝试提取代码块中的JSON
+    const codeBlockMatch = content.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+    if (codeBlockMatch) {
+      jsonStr = codeBlockMatch[1];
+      console.log('✅ 从代码块中提取JSON');
+    } else {
+      // 2. 尝试提取完整的JSON对象
+      const firstBrace = content.indexOf('{');
+      const lastBrace = content.lastIndexOf('}');
+      
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        jsonStr = content.substring(firstBrace, lastBrace + 1);
+        console.log('✅ 从文本中提取JSON');
+      } else {
+        throw new Error('无法在AI响应中找到有效的JSON格式');
+      }
+    }
+
+    // 基本清理JSON字符串
+    jsonStr = jsonStr.trim();
+    console.log('🔧 JSON长度:', jsonStr.length);
+
+    // 解析JSON数据
+    const parsedData = JSON.parse(jsonStr);
+    console.log('✅ JSON解析成功');
+
+    // 验证必需字段是否存在
+    if (!parsedData.versions || !Array.isArray(parsedData.versions)) {
+      throw new Error('AI响应缺少versions字段或格式错误');
+    }
+
+    // 格式化改写版本数据，添加唯一ID并验证字符限制
+    const formattedVersions: RewriteVersion[] = [];
+    const validationErrors: string[] = [];
+    
+    parsedData.versions.forEach((version: {
+      title: string;
+      content: string;
+      style: string;
+    }, index: number) => {
+      // 验证字符限制
+      const validation = validateContentLength(version.title, version.content);
+      
+      if (validation.valid) {
+        formattedVersions.push({
+          id: `rewrite-version-${index + 1}`,
+          title: version.title,
+          content: version.content,
+          style: version.style
+        });
+      } else {
+        // 即使超出限制，也添加到结果中，但在前端显示警告
+        formattedVersions.push({
+          id: `rewrite-version-${index + 1}`,
+          title: version.title,
+          content: version.content,
+          style: version.style
+        });
+        validationErrors.push(`版本${index + 1}(${version.style}): ${validation.errors.join(', ')}`);
+      }
+    });
+
+    // 如果有验证错误，记录警告但不阻止返回
+    if (validationErrors.length > 0) {
+      console.warn('⚠️ 部分改写版本超出字符限制:', validationErrors);
+    }
+
+    console.log(`✅ 成功解析 ${formattedVersions.length} 个改写版本（共${parsedData.versions.length}个，${validationErrors.length}个超出限制）`);
+
+    // 返回格式化后的数据
+    return {
+      versions: formattedVersions
+    };
+  } catch (error) {
+    console.error('❌ 解析AI改写响应失败:', error);
+    throw new Error(`AI响应解析失败: ${error instanceof Error ? error.message : '未知错误'}`);
+  }
+}
+
+// 主要的文案改写函数 - 这是外部调用的入口点
+export async function generateRewrite(input: RewriteInput): Promise<RewriteResult> {
+  console.log('🔥 正在使用AI服务进行文案改写');
+  
+  try {
+    // 1. 构建AI提示词
+    const prompt = buildRewritePrompt(input);
+    
+    // 2. 调用OpenRouter API
+    const response = await callOpenRouterAPI(prompt);
+    
+    // 3. 解析AI响应
+    const { versions } = parseRewriteResponse(response);
+    
+    // 验证是否成功生成改写版本
+    if (versions.length === 0) {
+      throw new Error('AI未能生成有效改写版本');
+    }
+
+    // 构建最终结果
+    const result: RewriteResult = {
+      versions
+    };
+    
+    console.log(`✅ 改写完成，版本数量: ${versions.length}`);
+
+    return result;
+  } catch (error) {
+    console.error('文案改写失败:', error);
+    throw error;
+  }
+}

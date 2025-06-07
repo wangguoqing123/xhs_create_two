@@ -59,7 +59,7 @@ export class CozeService {
    * @returns 解析后的笔记数据
    */
   async parseXiaohongshuNote(noteUrl: string, cookieStr: string) {
-    const workflowId = process.env.COZE_WORKFLOW_ID || '7511959723135762472';
+    const workflowId = process.env.COZE_WORKFLOW_DETAIL_ID || '7511959723135762472';
     
     try {
       // 清理Cookie字符串，移除可能导致问题的字符
