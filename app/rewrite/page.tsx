@@ -10,7 +10,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Link, Sparkles, Edit3, Zap, CheckCircle, Image as ImageIcon, FileText, Palette, Grid3X3, Copy, Download, RefreshCw, Target, Settings, Wand2 } from 'lucide-react';
+import { Link, Sparkles, Edit3, Zap, CheckCircle, Image as ImageIcon, FileText, Palette, Grid3X3, Copy, Download, RefreshCw, Target, Settings, Wand2, AlertCircle } from 'lucide-react';
+import { useCookieStorage } from '@/contexts/cookie-context';
+import { CookieConfigDialog } from '@/components/cookie-config-dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import Image from 'next/image';
 
 interface OriginalContent {
@@ -202,6 +205,11 @@ export default function RewritePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('copywriting');
   const [selectedMainImage, setSelectedMainImage] = useState(0);
+  const [parseError, setParseError] = useState('');
+  const [showCookieDialog, setShowCookieDialog] = useState(false);
+  
+  // Cookie 管理
+  const { cookie, hasCookie, isLoaded } = useCookieStorage();
   
   // 文案仿写相关状态
   const [rewriteSettings, setRewriteSettings] = useState<RewriteSettings>({
@@ -223,16 +231,74 @@ export default function RewritePage() {
   const [imageGenerationType, setImageGenerationType] = useState<'similar' | 'info'>('similar');
   const [isGeneratingImages, setIsGeneratingImages] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
+  const [selectedImages, setSelectedImages] = useState<number[]>([]);
+
+  // 验证链接格式
+  const isValidUrl = (url: string) => {
+    try {
+      const urlObj = new URL(url);
+      return urlObj.hostname.includes('xiaohongshu.com');
+    } catch {
+      return false;
+    }
+  };
 
   const handleParseContent = async () => {
-    if (!linkUrl.trim()) return;
+    if (!linkUrl.trim()) {
+      setParseError('请输入小红书笔记链接');
+      return;
+    }
+
+    if (!isValidUrl(linkUrl)) {
+      setParseError('请输入有效的小红书笔记链接');
+      return;
+    }
+
+    if (!hasCookie) {
+      setParseError('请先配置 Cookie');
+      setShowCookieDialog(true);
+      return;
+    }
     
     setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setOriginalContent(mockOriginalContent);
+    setParseError('');
+    setOriginalContent(null);
+
+    try {
+
+      
+      const response = await fetch('/api/xiaohongshu', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          noteUrl: linkUrl,
+          cookieStr: cookie,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || '解析失败');
+      }
+
+      if (result.success && result.data) {
+        setOriginalContent({
+          title: result.data.title,
+          content: result.data.content,
+          images: result.data.images
+        });
+      } else {
+        throw new Error('解析失败：未获取到数据');
+      }
+    } catch (err) {
+      console.error('解析错误:', err);
+      setParseError(err instanceof Error ? err.message : '解析失败，请重试');
+    } finally {
       setIsLoading(false);
-    }, 2000);
+    }
   };
 
   const handleSeoPositionChange = (positionId: string, checked: boolean) => {
@@ -262,6 +328,14 @@ export default function RewritePage() {
       setGeneratedCovers(mockGeneratedCovers);
       setIsGeneratingCover(false);
     }, 3000);
+  };
+
+  const handleImageSelection = (index: number) => {
+    setSelectedImages(prev => 
+      prev.includes(index) 
+        ? prev.filter(i => i !== index)
+        : [...prev, index]
+    );
   };
 
   const handleGenerateImages = async () => {
@@ -306,7 +380,19 @@ export default function RewritePage() {
           </CardHeader>
           <CardContent className="p-16 space-y-12">
             <div className="space-y-8">
-              <Label htmlFor="link" className="text-3xl font-bold text-gray-900">小红书笔记链接</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="link" className="text-3xl font-bold text-gray-900">小红书笔记链接</Label>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => setShowCookieDialog(true)}
+                  className={`px-8 py-4 text-lg rounded-2xl shadow-lg ${hasCookie ? 'text-green-600 border-green-200 bg-green-50 hover:bg-green-100' : 'text-orange-600 border-orange-200 bg-orange-50 hover:bg-orange-100'}`}
+                >
+                  <Settings className="h-5 w-5 mr-3" />
+                  {hasCookie ? 'Cookie 已配置' : '配置 Cookie'}
+                </Button>
+              </div>
+              
               <div className="flex gap-8">
                 <Input
                   id="link"
@@ -317,9 +403,9 @@ export default function RewritePage() {
                 />
                 <Button 
                   onClick={handleParseContent}
-                  disabled={!linkUrl.trim() || isLoading}
+                  disabled={!linkUrl.trim() || isLoading || !hasCookie}
                   size="lg"
-                  className="px-16 h-20 text-xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 shadow-2xl hover:shadow-3xl transition-all duration-500 rounded-3xl"
+                  className="px-16 h-20 text-xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 shadow-2xl hover:shadow-3xl transition-all duration-500 rounded-3xl disabled:opacity-50"
                 >
                   {isLoading ? (
                     <>
@@ -334,6 +420,35 @@ export default function RewritePage() {
                   )}
                 </Button>
               </div>
+
+              {/* 错误提示 */}
+              {parseError && (
+                <Alert variant="destructive" className="text-lg">
+                  <AlertCircle className="h-5 w-5" />
+                  <AlertDescription>{parseError}</AlertDescription>
+                </Alert>
+              )}
+
+              {/* URL 格式验证提示 */}
+              {linkUrl && !isValidUrl(linkUrl) && (
+                <Alert variant="destructive" className="text-lg">
+                  <AlertCircle className="h-5 w-5" />
+                  <AlertDescription>
+                    请输入有效的小红书笔记链接
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Cookie 配置提示 */}
+              {!hasCookie && isLoaded && (
+                <Alert className="text-lg border-orange-200 bg-orange-50">
+                  <AlertCircle className="h-5 w-5 text-orange-600" />
+                  <AlertDescription className="text-orange-800">
+                    请先配置小红书 Cookie 才能解析笔记内容。点击上方"配置 Cookie"按钮进行设置。
+                  </AlertDescription>
+                </Alert>
+              )}
+
               <div className="flex items-center space-x-6 text-lg text-gray-500">
                 <CheckCircle className="h-6 w-6 text-green-500" />
                 <span>支持解析小红书笔记的标题、文字内容和图片信息</span>
@@ -594,10 +709,15 @@ export default function RewritePage() {
                         </h3>
                         <div className="relative aspect-[3/4] bg-gray-100 rounded-3xl overflow-hidden shadow-2xl">
                           <Image
-                            src={originalContent.images[0]}
+                            src={originalContent.images[0].includes('xhscdn.com') 
+                              ? `/api/proxy-image?url=${encodeURIComponent(originalContent.images[0])}`
+                              : originalContent.images[0]
+                            }
                             alt="原始封面"
                             fill
                             className="object-cover"
+                            style={{ position: 'absolute' }}
+                            unoptimized={originalContent.images[0].includes('xhscdn.com')}
                           />
                         </div>
                       </div>
@@ -621,12 +741,13 @@ export default function RewritePage() {
                                     : 'border-gray-200 hover:border-purple-300 hover:shadow-xl'
                                 }`}
                               >
-                                <div className="aspect-[3/4]">
+                                <div className="relative aspect-[3/4]">
                                   <Image
                                     src={template.preview}
                                     alt={template.name}
                                     fill
                                     className="object-cover"
+                                    style={{ position: 'absolute' }}
                                   />
                                 </div>
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
@@ -675,12 +796,13 @@ export default function RewritePage() {
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
                           {generatedCovers.map((cover, index) => (
                             <div key={index} className="relative group">
-                              <div className="aspect-[3/4] bg-gray-100 rounded-3xl overflow-hidden shadow-xl group-hover:shadow-2xl transition-all duration-500">
+                              <div className="relative aspect-[3/4] bg-gray-100 rounded-3xl overflow-hidden shadow-xl group-hover:shadow-2xl transition-all duration-500">
                                 <Image
                                   src={cover}
                                   alt={`生成封面 ${index + 1}`}
                                   fill
                                   className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                  style={{ position: 'absolute' }}
                                 />
                               </div>
                               <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
@@ -708,10 +830,17 @@ export default function RewritePage() {
                         {/* 主图 */}
                         <div className="relative aspect-square bg-gray-100 rounded-3xl overflow-hidden shadow-2xl">
                           <Image
-                            src={originalContent.images[selectedMainImage + 1] || originalContent.images[1]}
+                            src={(() => {
+                              const imgSrc = originalContent.images[selectedMainImage + 1] || originalContent.images[1];
+                              return imgSrc.includes('xhscdn.com') 
+                                ? `/api/proxy-image?url=${encodeURIComponent(imgSrc)}`
+                                : imgSrc;
+                            })()}
                             alt="主要内页图"
                             fill
                             className="object-cover"
+                            style={{ position: 'absolute' }}
+                            unoptimized={(originalContent.images[selectedMainImage + 1] || originalContent.images[1]).includes('xhscdn.com')}
                           />
                         </div>
                         
@@ -729,10 +858,15 @@ export default function RewritePage() {
                                 }`}
                               >
                                 <Image
-                                  src={image}
+                                  src={image.includes('xhscdn.com') 
+                                    ? `/api/proxy-image?url=${encodeURIComponent(image)}`
+                                    : image
+                                  }
                                   alt={`内页图 ${index + 1}`}
                                   fill
                                   className="object-cover"
+                                  style={{ position: 'absolute' }}
+                                  unoptimized={image.includes('xhscdn.com')}
                                 />
                               </div>
                             ))}
@@ -811,51 +945,77 @@ export default function RewritePage() {
                             <div className="space-y-6">
                               <p className="text-lg text-gray-700 font-medium">请选择想要生成相似图片的原图：</p>
                               
-                              {/* 选择缩略图 */}
+                              {/* 选择缩略图 - 支持多选 */}
                               <div className="grid grid-cols-3 gap-4">
                                 {originalContent.images.slice(1).map((image, index) => (
                                   <div
                                     key={index}
-                                    onClick={() => setSelectedMainImage(index)}
+                                    onClick={() => handleImageSelection(index)}
                                     className={`relative aspect-square bg-gray-100 rounded-2xl overflow-hidden cursor-pointer border-3 transition-all duration-300 ${
-                                      selectedMainImage === index
+                                      selectedImages.includes(index)
                                         ? 'border-green-500 shadow-xl scale-105 ring-4 ring-green-200'
                                         : 'border-gray-200 hover:border-green-300'
                                     }`}
                                   >
                                     <Image
-                                      src={image}
+                                      src={image.includes('xhscdn.com') 
+                                        ? `/api/proxy-image?url=${encodeURIComponent(image)}`
+                                        : image
+                                      }
                                       alt={`选择图片 ${index + 1}`}
                                       fill
                                       className="object-cover"
+                                      style={{ position: 'absolute' }}
+                                      unoptimized={image.includes('xhscdn.com')}
                                     />
-                                    {selectedMainImage === index && (
+                                    {selectedImages.includes(index) && (
                                       <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
                                         <CheckCircle className="h-12 w-12 text-green-600 bg-white rounded-full" />
+                                      </div>
+                                    )}
+                                    {/* 显示选择序号 */}
+                                    {selectedImages.includes(index) && (
+                                      <div className="absolute top-2 right-2 w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                                        {selectedImages.indexOf(index) + 1}
                                       </div>
                                     )}
                                   </div>
                                 ))}
                               </div>
                               
-                              <Button
-                                onClick={handleGenerateImages}
-                                disabled={isGeneratingImages}
-                                size="lg"
-                                className="w-full h-16 text-xl bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 shadow-2xl hover:shadow-3xl transition-all duration-500 rounded-2xl"
-                              >
-                                {isGeneratingImages ? (
-                                  <>
-                                    <RefreshCw className="mr-3 h-6 w-6 animate-spin" />
-                                    生成中...
-                                  </>
-                                ) : (
-                                  <>
-                                    <ImageIcon className="mr-3 h-6 w-6" />
-                                    一键生成相似图片
-                                  </>
+                              <div className="space-y-4">
+                                {selectedImages.length > 0 && (
+                                  <div className="text-center p-4 bg-green-50 rounded-2xl border border-green-200">
+                                    <p className="text-green-700 font-medium">
+                                      已选择 {selectedImages.length} 张图片，将为每张图片生成 4 个相似版本
+                                    </p>
+                                  </div>
                                 )}
-                              </Button>
+                                
+                                <Button
+                                  onClick={handleGenerateImages}
+                                  disabled={isGeneratingImages || selectedImages.length === 0}
+                                  size="lg"
+                                  className="w-full h-16 text-xl bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 shadow-2xl hover:shadow-3xl transition-all duration-500 rounded-2xl disabled:opacity-50"
+                                >
+                                  {isGeneratingImages ? (
+                                    <>
+                                      <RefreshCw className="mr-3 h-6 w-6 animate-spin" />
+                                      生成中...
+                                    </>
+                                  ) : selectedImages.length === 0 ? (
+                                    <>
+                                      <ImageIcon className="mr-3 h-6 w-6" />
+                                      请先选择要生成的图片
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ImageIcon className="mr-3 h-6 w-6" />
+                                      生成 {selectedImages.length * 4} 张相似图片
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
                             </div>
                           </div>
                         )}
@@ -976,6 +1136,12 @@ export default function RewritePage() {
             </Card>
           </div>
         )}
+
+        {/* Cookie 配置对话框 */}
+        <CookieConfigDialog
+          open={showCookieDialog}
+          onOpenChange={setShowCookieDialog}
+        />
       </div>
     </MainLayout>
   );

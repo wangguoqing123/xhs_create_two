@@ -3,7 +3,7 @@
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowRight, Lightbulb, Library, Edit3, Users, MessageSquare, TrendingUp, Sparkles, Zap, Target, BarChart3 } from 'lucide-react';
+import { ArrowRight, Lightbulb, Library, Edit3, Users, MessageSquare, TrendingUp, Sparkles, Zap, Target, BarChart3, FileText } from 'lucide-react';
 import Link from 'next/link';
 
 const quickAccessItems = [
