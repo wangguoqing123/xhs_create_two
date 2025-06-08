@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -204,6 +205,7 @@ const seoPositionOptions = [
 ];
 
 export default function RewritePage() {
+  const searchParams = useSearchParams();
   const [linkUrl, setLinkUrl] = useState('');
   const [originalContent, setOriginalContent] = useState<OriginalContent | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -217,6 +219,115 @@ export default function RewritePage() {
   
   // Toast 通知
   const { toast } = useToast();
+
+  // 处理URL参数，自动解析内容
+  useEffect(() => {
+    const urlParam = searchParams.get('url');
+    if (urlParam && isLoaded && hasCookie) {
+      setLinkUrl(decodeURIComponent(urlParam));
+      // 延迟一点时间确保状态更新完成
+      setTimeout(() => {
+        handleParseContentFromUrl(decodeURIComponent(urlParam));
+      }, 100);
+    }
+  }, [searchParams, isLoaded, hasCookie]);
+
+  // 从正文中移除话题标签，保持原有换行格式
+  const removeTopicsFromContent = (content: string) => {
+    if (!content) return '';
+    // 移除 #话题名称# 格式的话题标签，但保持换行
+    return content
+      .replace(/#[^#\s]+#/g, '') // 移除话题标签
+      .replace(/\n\s*\n/g, '\n\n') // 规范化多个换行为双换行
+      .replace(/[ \t]+/g, ' ') // 将多个空格/制表符替换为单个空格
+      .trim(); // 去除首尾空白
+  };
+
+  // 从正文中提取话题标签
+  const extractTopicsFromContent = (content: string): string[] => {
+    if (!content) return [];
+    const matches = content.match(/#[^#\s]+#/g);
+    if (!matches) return [];
+    // 去除#号并去重
+    return Array.from(new Set(matches.map(tag => tag.replace(/#/g, ''))));
+  };
+
+  // 从URL参数自动解析内容的函数
+  const handleParseContentFromUrl = async (url: string) => {
+    if (!url.trim()) return;
+
+    if (!isValidUrl(url)) {
+      setParseError('请输入有效的小红书笔记链接');
+      return;
+    }
+
+    if (!hasCookie) {
+      setParseError('请先配置 Cookie');
+      setShowCookieDialog(true);
+      return;
+    }
+    
+    setIsLoading(true);
+    setParseError('');
+    setOriginalContent(null);
+
+    try {
+      const response = await fetch('/api/xiaohongshu', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          noteUrl: url,
+          cookieStr: cookie,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || '解析失败');
+      }
+
+      if (result.success && result.data) {
+        setOriginalContent({
+          title: result.data.title,
+          content: result.data.content,
+          images: result.data.images
+        });
+        
+        toast({
+          title: "内容解析成功！",
+          description: "已自动解析笔记内容，可以开始改写了",
+          className: "border-green-200 bg-green-50 text-green-900",
+        });
+        
+        // 解析完成后自动滚动到成功提示区域
+        setTimeout(() => {
+          const element = document.getElementById('parse-success');
+          if (element) {
+            element.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'center' 
+            });
+          }
+        }, 100);
+      } else {
+        throw new Error('解析失败：未获取到数据');
+      }
+    } catch (err) {
+      console.error('解析错误:', err);
+      setParseError(err instanceof Error ? err.message : '解析失败，请重试');
+      
+      toast({
+        title: "解析失败",
+        description: err instanceof Error ? err.message : '解析失败，请重试',
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // 计算字符数（考虑Emoji占两个字符）
   const countCharacters = (text: string): number => {
@@ -638,10 +749,32 @@ export default function RewritePage() {
                           </h3>
                           <div className="p-8 bg-gray-50 rounded-3xl border border-gray-200 max-h-[600px] overflow-y-auto shadow-lg">
                             <pre className="whitespace-pre-wrap text-gray-700 font-sans leading-relaxed text-lg">
-                              {originalContent.content}
+                              {removeTopicsFromContent(originalContent.content)}
                             </pre>
                           </div>
                         </div>
+
+                        {/* 话题标签展示 */}
+                        {extractTopicsFromContent(originalContent.content).length > 0 && (
+                          <div className="space-y-6">
+                            <h3 className="text-3xl font-bold text-gray-900 flex items-center gap-4">
+                              <div className="w-3 h-10 bg-gradient-to-b from-pink-500 to-rose-500 rounded-full"></div>
+                              相关话题
+                            </h3>
+                            <div className="p-8 bg-gradient-to-r from-pink-50 to-rose-50 rounded-3xl border border-pink-200 shadow-lg">
+                              <div className="flex flex-wrap gap-3">
+                                {extractTopicsFromContent(originalContent.content).map((tag, index) => (
+                                  <div
+                                    key={index}
+                                    className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white text-base font-medium rounded-full shadow-md hover:shadow-lg transition-all duration-200"
+                                  >
+                                    #{tag}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* 右栏：仿写设置 */}
@@ -826,15 +959,15 @@ export default function RewritePage() {
                         </h3>
                         <div className="relative aspect-[3/4] bg-gray-100 rounded-3xl overflow-hidden shadow-2xl">
                           <Image
-                            src={originalContent.images[0].includes('xhscdn.com') 
+                            src={originalContent.images[0] && originalContent.images[0].includes('xhscdn.com') 
                               ? `/api/proxy-image?url=${encodeURIComponent(originalContent.images[0])}`
-                              : originalContent.images[0]
+                              : originalContent.images[0] || ''
                             }
                             alt="原始封面"
                             fill
                             className="object-cover"
                             style={{ position: 'absolute' }}
-                            unoptimized={originalContent.images[0].includes('xhscdn.com')}
+                            unoptimized={originalContent.images[0] ? originalContent.images[0].includes('xhscdn.com') : false}
                           />
                         </div>
                       </div>
@@ -948,16 +1081,19 @@ export default function RewritePage() {
                         <div className="relative aspect-square bg-gray-100 rounded-3xl overflow-hidden shadow-2xl">
                           <Image
                             src={(() => {
-                              const imgSrc = originalContent.images[selectedMainImage + 1] || originalContent.images[1];
-                              return imgSrc.includes('xhscdn.com') 
+                              const imgSrc = originalContent.images[selectedMainImage + 1] || originalContent.images[1] || originalContent.images[0];
+                              return imgSrc && imgSrc.includes('xhscdn.com') 
                                 ? `/api/proxy-image?url=${encodeURIComponent(imgSrc)}`
-                                : imgSrc;
+                                : imgSrc || '';
                             })()}
                             alt="主要内页图"
                             fill
                             className="object-cover"
                             style={{ position: 'absolute' }}
-                            unoptimized={(originalContent.images[selectedMainImage + 1] || originalContent.images[1]).includes('xhscdn.com')}
+                            unoptimized={(() => {
+                              const imgSrc = originalContent.images[selectedMainImage + 1] || originalContent.images[1] || originalContent.images[0];
+                              return imgSrc ? imgSrc.includes('xhscdn.com') : false;
+                            })()}
                           />
                         </div>
                         

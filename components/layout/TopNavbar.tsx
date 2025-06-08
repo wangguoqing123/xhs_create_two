@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sparkles, Home, Lightbulb, Library, Edit3, Users, MessageSquare, Zap } from 'lucide-react';
+import { Sparkles, Home, Lightbulb, Library, Edit3, Users, MessageSquare, Zap, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navigation = [
@@ -10,8 +10,8 @@ const navigation = [
   { name: '智能选题', href: '/topic-generator', icon: Lightbulb },
   { name: '选题库', href: '/topic-library', icon: Library },
   { name: '爆文改写', href: '/rewrite', icon: Edit3 },
+  { name: '小红书搜索', href: '/search', icon: Search },
   { name: '用户监控', href: '/monitoring/users', icon: Users },
-  { name: '评论监控', href: '/monitoring/comments', icon: MessageSquare },
 ];
 
 export function TopNavbar() {
