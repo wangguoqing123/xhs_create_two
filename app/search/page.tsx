@@ -9,8 +9,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { Search, Heart, MessageCircle, Share2, Play, ExternalLink, Sparkles, ChevronDown, Filter, CheckCircle, ChevronLeft, ChevronRight, X, Loader2 } from 'lucide-react';
+import { Search, Heart, MessageCircle, Share2, Play, ExternalLink, Sparkles, ChevronDown, Filter, CheckCircle, ChevronLeft, ChevronRight, X, Loader2, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useCookieStorage } from '@/contexts/cookie-context';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface XiaohongshuNote {
   note_id: string;
@@ -72,10 +74,22 @@ export default function SearchPage() {
   const [searchCount, setSearchCount] = useState<20 | 40 | 60 | 100>(20);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   
+  // Cookie 管理
+  const { cookie, hasCookie, isLoaded } = useCookieStorage();
+  
   const { toast } = useToast();
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
+    
+    if (!hasCookie) {
+      toast({
+        title: "请先配置 Cookie",
+        description: "请在导航栏配置小红书 Cookie 后再进行搜索",
+        variant: "destructive",
+      });
+      return;
+    }
     
     setIsSearching(true);
     setSearchResults([]);
@@ -95,7 +109,8 @@ export default function SearchPage() {
           keywords: searchQuery,
           noteType: noteTypeMap[queryType],
           sort: sortMap[sortRule],
-          totalNumber: searchCount
+          totalNumber: searchCount,
+          cookieStr: cookie
         }),
       });
 
@@ -132,6 +147,15 @@ export default function SearchPage() {
   };
 
   const handleNoteClick = async (note: XiaohongshuNote) => {
+    if (!hasCookie) {
+      toast({
+        title: "请先配置 Cookie",
+        description: "请在导航栏配置小红书 Cookie 后再查看详情",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSelectedNote(note);
     setNoteDetail(null);
     setCurrentImageIndex(0);
@@ -147,7 +171,7 @@ export default function SearchPage() {
         },
         body: JSON.stringify({
           noteUrl: note.note_url,
-          cookieStr: "abRequestId=bcc474b6-9535-53b3-8729-0faddc44a244; a1=196e7ea0582vo9ozc2czk9jvzze7yh7oo6uww2zk430000847149; webId=910ade238051bf5af6c011ab7b0b4910; gid=yjKdWd08dDlSyjKdWd082KJuYJhljluSJSuT7T4jVhuudEq8WvxWlE888Y4Wy4j8SJyyqf0K; x-user-id-ad.xiaohongshu.com=61b6a28f0000000021025318; customerClientId=360864754824591; web_session=040069b0c2e1c7d4034e52a91e3a4b7fb1ab5f; x-user-id-pgy.xiaohongshu.com=61b6a28f0000000021025318; x-user-id-creator.xiaohongshu.com=61b6a28f0000000021025318; access-token-creator.xiaohongshu.com=customer.creator.AT-68c517510000847120470270uh9udvkh04phcbmz; galaxy_creator_session_id=H7TTUX041pvgznp76CLWjWtkOwmYqaW2nthE; galaxy.creator.beaker.session.id=1748558331898042783807; webBuild=4.67.0; customer-sso-sid=68c517511534326540764320d04m37ksgwnnegew; ares.beaker.session.id=1748915372816045956759; access-token-ad.xiaohongshu.com=customer.leona.AT-68c5175115343265384312680itruyti0boyrenv; xsecappid=xhs-pc-web; unread={%22ub%22:%22683165bc000000002301f923%22%2C%22ue%22:%226829599e000000002001cd70%22%2C%22uc%22:25}; websectiga=f47eda31ec99545da40c2f731f0630efd2b0959e1dd10d5fedac3dce0bd1e04d; sec_poison_id=4e5d39fc-d2a6-4a93-8c99-2bd695525505; loadts=1748940087133",
+          cookieStr: cookie,
         }),
       });
 
@@ -281,7 +305,7 @@ export default function SearchPage() {
                   />
                   <Button 
                     onClick={handleSearch}
-                    disabled={!searchQuery.trim() || isSearching}
+                    disabled={!searchQuery.trim() || isSearching || !hasCookie}
                     size="lg"
                     className="px-16 h-20 text-xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 shadow-2xl hover:shadow-3xl transition-all duration-500 rounded-3xl disabled:opacity-50"
                   >
@@ -299,12 +323,20 @@ export default function SearchPage() {
                   </Button>
                 </div>
 
-                {/* <div className="flex items-center space-x-6 text-lg text-gray-500">
-                  <div className="h-6 w-6 text-green-500 flex items-center justify-center">
-                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                  </div>
+                {/* Cookie 配置提示 */}
+                {!hasCookie && isLoaded && (
+                  <Alert className="text-lg border-orange-200 bg-orange-50">
+                    <AlertCircle className="h-5 w-5 text-orange-600" />
+                    <AlertDescription className="text-orange-800">
+                      请先在导航栏配置小红书 Cookie 才能进行搜索。
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="flex items-center space-x-6 text-lg text-gray-500">
+                  <CheckCircle className="h-6 w-6 text-green-500" />
                   <span>支持搜索小红书笔记的标题、文字内容和图片信息</span>
-                </div> */}
+                </div>
               </div>
             </CardContent>
           </Card>

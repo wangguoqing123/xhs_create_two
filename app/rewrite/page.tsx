@@ -11,9 +11,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Link, Sparkles, Edit3, Zap, CheckCircle, Image as ImageIcon, FileText, Palette, Grid3X3, Copy, Download, RefreshCw, Target, Settings, Wand2, AlertCircle } from 'lucide-react';
+import { Link, Sparkles, Edit3, Zap, CheckCircle, Image as ImageIcon, FileText, Palette, Grid3X3, Copy, Download, RefreshCw, Target, Wand2, AlertCircle } from 'lucide-react';
 import { useCookieStorage } from '@/contexts/cookie-context';
-import { CookieConfigDialog } from '@/components/cookie-config-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
@@ -212,7 +211,6 @@ export default function RewritePage() {
   const [activeTab, setActiveTab] = useState('copywriting');
   const [selectedMainImage, setSelectedMainImage] = useState(0);
   const [parseError, setParseError] = useState('');
-  const [showCookieDialog, setShowCookieDialog] = useState(false);
   
   // Cookie 管理
   const { cookie, hasCookie, isLoaded } = useCookieStorage();
@@ -263,7 +261,6 @@ export default function RewritePage() {
 
     if (!hasCookie) {
       setParseError('请先配置 Cookie');
-      setShowCookieDialog(true);
       return;
     }
     
@@ -389,7 +386,6 @@ export default function RewritePage() {
 
     if (!hasCookie) {
       setParseError('请先配置 Cookie');
-      setShowCookieDialog(true);
       return;
     }
     
@@ -602,15 +598,6 @@ export default function RewritePage() {
             <div className="space-y-8">
               <div className="flex items-center justify-between">
                 <Label htmlFor="link" className="text-3xl font-bold text-gray-900">小红书笔记链接</Label>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={() => setShowCookieDialog(true)}
-                  className={`px-8 py-4 text-lg rounded-2xl shadow-lg ${hasCookie ? 'text-green-600 border-green-200 bg-green-50 hover:bg-green-100' : 'text-orange-600 border-orange-200 bg-orange-50 hover:bg-orange-100'}`}
-                >
-                  <Settings className="h-5 w-5 mr-3" />
-                  {hasCookie ? 'Cookie 已配置' : '配置 Cookie'}
-                </Button>
               </div>
               
               <div className="flex gap-8">
@@ -664,7 +651,7 @@ export default function RewritePage() {
                 <Alert className="text-lg border-orange-200 bg-orange-50">
                   <AlertCircle className="h-5 w-5 text-orange-600" />
                   <AlertDescription className="text-orange-800">
-                    请先配置小红书 Cookie 才能解析笔记内容。点击上方"配置 Cookie"按钮进行设置。
+                    请先在导航栏配置小红书 Cookie 才能解析笔记内容。
                   </AlertDescription>
                 </Alert>
               )}
@@ -824,7 +811,7 @@ export default function RewritePage() {
                         <div className="p-8 bg-gradient-to-br from-pink-50 to-rose-50 rounded-3xl border border-pink-200 shadow-xl">
                           <div className="flex items-center gap-4 mb-8">
                             <div className="p-3 bg-gradient-to-r from-pink-500 to-rose-500 rounded-2xl">
-                              <Settings className="h-8 w-8 text-white" />
+                              <Wand2 className="h-8 w-8 text-white" />
                             </div>
                             <h3 className="text-3xl font-bold text-gray-900">内容设置</h3>
                           </div>
@@ -1390,11 +1377,7 @@ export default function RewritePage() {
           </div>
         )}
 
-        {/* Cookie 配置对话框 */}
-        <CookieConfigDialog
-          open={showCookieDialog}
-          onOpenChange={setShowCookieDialog}
-        />
+
       </div>
     </MainLayout>
   );
