@@ -7,10 +7,10 @@
   "installCommand": "npm ci",
   "functions": {
     "app/api/**/*.js": {
-      "maxDuration": 30
+      "maxDuration": 60
     },
     "app/api/**/*.ts": {
-      "maxDuration": 30
+      "maxDuration": 60
     }
   },
   "headers": [

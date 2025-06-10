@@ -35,20 +35,28 @@ export class CozeService {
    */
   async runWorkflow(workflowId: string, parameters: WorkflowParameters): Promise<any> {
     try {
+      console.log('开始调用Coze工作流:', { workflowId, parameters });
+      
       // 使用非流式方式调用工作流
       const response = await this.apiClient.workflows.runs.create({
         workflow_id: workflowId,
         parameters
       });
 
-
+      console.log('Coze工作流响应:', response);
 
       // 直接返回响应
       return response;
 
     } catch (error) {
       console.error('Coze 工作流调用失败:', error);
-      throw new Error(`Coze 工作流调用失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      
+      // 提供更详细的错误信息
+      if (error instanceof Error) {
+        throw new Error(`Coze 工作流调用失败: ${error.message}`);
+      } else {
+        throw new Error('Coze 工作流调用失败: 未知错误');
+      }
     }
   }
 
@@ -173,9 +181,16 @@ export class CozeService {
     const token = process.env.COZE_API_TOKEN;
     
     if (!token) {
-      throw new Error('缺少 COZE_API_TOKEN 环境变量');
+      console.error('环境变量检查失败: COZE_API_TOKEN 未设置');
+      throw new Error('缺少 COZE_API_TOKEN 环境变量，请检查Vercel环境变量配置');
     }
 
+    if (token.trim() === '') {
+      console.error('环境变量检查失败: COZE_API_TOKEN 为空');
+      throw new Error('COZE_API_TOKEN 环境变量不能为空');
+    }
+
+    console.log('Coze服务初始化成功');
     return new CozeService({ token });
   }
 } 

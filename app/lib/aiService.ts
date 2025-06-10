@@ -134,60 +134,80 @@ function buildPrompt(input: UserInput): string {
       
       console.log('请求参数:', JSON.stringify(requestBody, null, 2))
   
-      // 发送HTTP POST请求到OpenRouter API
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getOpenRouterApiKey()}`,      // API密钥认证
-          'HTTP-Referer': 'https://xiaohongshu-topic-generator.com',  // 请求来源
-          'X-Title': 'Xiaohongshu Topic Generator',               // 应用标题
-          'Content-Type': 'application/json'                      // 请求内容类型
-        },
-        body: JSON.stringify(requestBody)
-      })
+      // 创建AbortController用于超时控制
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25000); // 25秒超时
   
-      console.log('API响应状态:', response.status, response.statusText)
-  
-      // 检查API响应是否成功
-      if (!response.ok) {
-        const errorText = await response.text()
-        // 记录详细错误信息到服务端日志
-        console.error('API错误响应:', {
-          status: response.status,
-          statusText: response.statusText,
-          errorDetails: errorText
+      try {
+        // 发送HTTP POST请求到OpenRouter API
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${getOpenRouterApiKey()}`,      // API密钥认证
+            'HTTP-Referer': 'https://xiaohongshu-topic-generator.com',  // 请求来源
+            'X-Title': 'Xiaohongshu Topic Generator',               // 应用标题
+            'Content-Type': 'application/json'                      // 请求内容类型
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal // 添加超时信号
         })
-        // 向调用者返回通用错误信息，不暴露内部细节
-        throw new Error('AI service request failed. Please check server logs for details.')
-      }
   
-      // 解析API响应的JSON数据
-      const data = await response.json()
-      console.log('API响应数据结构:', {
-        hasChoices: !!data.choices,
-        choicesLength: data.choices?.length,
-        hasContent: !!data.choices?.[0]?.message?.content,
-        contentLength: data.choices?.[0]?.message?.content?.length,
-        finishReason: data.choices?.[0]?.finish_reason
-      })
-      
-      // 验证响应数据的完整性
-      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-        throw new Error('API响应格式异常：缺少choices或message字段')
-      }
+        clearTimeout(timeoutId); // 清除超时定时器
   
-      // 检查响应是否被截断
-      if (data.choices[0].finish_reason === 'length') {
-        throw new Error('AI响应被截断，请减少提示词长度或增加max_tokens')
+        console.log('API响应状态:', response.status, response.statusText)
+  
+        // 检查API响应是否成功
+        if (!response.ok) {
+          const errorText = await response.text()
+          // 记录详细错误信息到服务端日志
+          console.error('API错误响应:', {
+            status: response.status,
+            statusText: response.statusText,
+            errorDetails: errorText
+          })
+          // 向调用者返回通用错误信息，不暴露内部细节
+          throw new Error(`AI service request failed: ${response.status} ${response.statusText}`)
+        }
+  
+        // 解析API响应的JSON数据
+        const data = await response.json()
+        console.log('API响应数据结构:', {
+          hasChoices: !!data.choices,
+          choicesLength: data.choices?.length,
+          hasContent: !!data.choices?.[0]?.message?.content,
+          contentLength: data.choices?.[0]?.message?.content?.length,
+          finishReason: data.choices?.[0]?.finish_reason
+        })
+        
+        // 验证响应数据的完整性
+        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+          throw new Error('API响应格式异常：缺少choices或message字段')
+        }
+  
+        // 检查响应是否被截断
+        if (data.choices[0].finish_reason === 'length') {
+          throw new Error('AI响应被截断，请减少提示词长度或增加max_tokens')
+        }
+        
+        return data
+      } catch (fetchError) {
+        clearTimeout(timeoutId); // 确保清除超时定时器
+        throw fetchError;
       }
-      
-      return data
     } catch (error) {
       console.error('AI API调用错误:', error)
+      
+      // 处理超时错误
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('请求超时，请稍后重试')
+      }
+      
       // 处理网络连接错误
       if (error instanceof TypeError && error.message.includes('fetch')) {
         throw new Error('网络连接失败，请检查网络连接')
       }
+      
+      // 处理其他错误
       throw error
     }
   }
@@ -380,14 +400,14 @@ ${originalContentSection}
 ## 4. 最终任务：创作三个版本的文案
 现在，请整合你的所有分析，并严格围绕用户指定的【改写主题】和【改写目的】，创作出以下三个版本。
 
-在撰写完整文案前，你必须先针对【步骤1】中的“改写主题”，进行一次高强度的标题创意风暴。请生成至少5个运用了不同爆款公式的、极具吸引力的标题备选。
+在撰写完整文案前，你必须先针对【步骤1】中的"改写主题"，进行一次高强度的标题创意风暴。请生成至少5个运用了不同爆款公式的、极具吸引力的标题备选。
 **你必须从以下标题公式中进行选择和组合：**
-* **数字盘点式**: 公式为“数字 + 结果/方法”，例如：“5个方法，让xx效率翻倍”。
-* **结果炫耀式**: 公式为“我靠xx，实现了xx惊人结果”，例如：“我用1个月，读完了别人1年的书”。
-* **反向安利式**: 公式为“求求别用/千万别去xx，我怕你xx”，例如：“求求别用这App，我怕你上瘾戒不掉”。
-* **痛点共鸣式**: 公式为“你是不是也xx”，直击用户痛点，例如：“深夜睡不着，你是不是也和我一样？”。
-* **保姆级教程**: 公式为“保姆级/手把手，教你xx”，强调易学性。
-* **制造悬念式**: 公式为“xx的秘密，终于被我发现了！”，激发好奇心。
+* **数字盘点式**: 公式为"数字 + 结果/方法"，例如："5个方法，让xx效率翻倍"。
+* **结果炫耀式**: 公式为"我靠xx，实现了xx惊人结果"，例如："我用1个月，读完了别人1年的书"。
+* **反向安利式**: 公式为"求求别用/千万别去xx，我怕你xx"，例如："求求别用这App，我怕你上瘾戒不掉"。
+* **痛点共鸣式**: 公式为"你是不是也xx"，直击用户痛点，例如："深夜睡不着，你是不是也和我一样？"。
+* **保姆级教程**: 公式为"保姆级/手把手，教你xx"，强调易学性。
+* **制造悬念式**: 公式为"xx的秘密，终于被我发现了！"，激发好奇心。
 
 ### **【核心创作规则】**
 1.  **遵守字数限制**: 这是必须遵守的铁律。
